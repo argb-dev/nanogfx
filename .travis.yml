@@ -1,0 +1,18 @@
+language: cpp
+jobs:
+  include:
+    - os: linux
+      compiler:
+       - gcc
+      addons:
+        apt:
+          packages:
+            - libX11-dev
+            - libgl-dev
+            - libglu-dev
+      script: make -f makefile.gcc
+    - os: osx
+      compiler:
+       - clang
+      script: make -f makefile.osx
+
