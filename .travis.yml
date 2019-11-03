@@ -15,4 +15,6 @@ jobs:
       compiler:
        - clang
       script: make -f makefile.osx
+    - os: windows
+      script: nmake -f makefile.vc
 
