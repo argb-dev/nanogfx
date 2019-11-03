@@ -1,0 +1,7 @@
+#sample osx makefile for test application
+CXX=clang
+CFLAGS=-I. -Wall -Wextra  -DNG_3D_SUPPORT -Wno-unused-parameter -ObjC++ 
+LDFLAGS= -framework OpenGL -framework CoreVideo -framework Cocoa -lstdc++
+OUT=test.elf
+all:
+		$(CXX) $(CFLAGS) test.cpp -o $(OUT)  $(LDFLAGS) 
