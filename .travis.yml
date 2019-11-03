@@ -7,9 +7,9 @@ jobs:
       addons:
         apt:
           packages:
-            - libX11-dev
-            - libgl-dev
-            - libglu-dev
+            - libx11-dev
+            - libgl1-mesa-dev
+            - libglu1-mesa-dev
       script: make -f makefile.gcc
     - os: osx
       compiler:
