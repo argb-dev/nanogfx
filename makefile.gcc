@@ -1,6 +1,6 @@
 #sample osx makefile for test application
 CXX=g++
-CFLAGS=-I. -Wall -Wextra  -DNG_3D_SUPPORT -DNG_GL_SUPPORT -DNG_TIMER_SUPPORT -DNG_THREAD_SUPPORT -Wno-unused-parameter 
+CFLAGS=-I. -Wall -Wextra -Wno-reorder -DNG_GL_SUPPORT -DNG_TIMER_SUPPORT -DNG_THREAD_SUPPORT -Wno-unused-parameter
 LDFLAGS= -lGL -lGLU -lX11 -lrt
 OUT=test.elf
 all:
