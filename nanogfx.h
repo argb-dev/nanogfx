@@ -68,6 +68,11 @@ Quick Start:
 #endif
 /*++++++++++++++++++++++++++++++++++++++++++*/
 
+#ifdef NG_3D_SUPPORT //legacy 
+#       define NG_GL_SUPPORT
+#       define SURFACE_3D SURFACE_GL
+#endif
+
 #ifdef __nG_X11
 # include <X11/Xlib.h>
 # include <X11/XKBlib.h>
@@ -122,11 +127,6 @@ Quick Start:
 # ifdef NG_THREAD_SUPPORT
 #   include <pthread.h>
 # endif
-#endif
-
-#ifdef NG_3D_SUPPORT //legacy 
-#       define NG_GL_SUPPORT
-#       define SURFACE_3D SURFACE_GL
 #endif
 
 
@@ -1583,7 +1583,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
               glXGetFBConfigAttrib( display, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf );
               glXGetFBConfigAttrib( display, fbc[i], GLX_SAMPLES       , &samples  );
             }
-            if ( best_fbc < 0 || samp_buf && samples > best_num_samp ) {
+            if ( best_fbc < 0 || (samp_buf && (samples > best_num_samp)) ) {
               best_fbc = i, best_num_samp = samples;
             }
             if ( worst_fbc < 0 || !samp_buf || samples < worst_num_samp ) {
@@ -1608,11 +1608,12 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
 # endif //NG_EGL_SUPPORT
 # endif /*NG_GLX_SUPPORT */
     }
-    else if( surfaceType == SURFACE_2D || surfaceType == SURFACE_NONE)
-    {
+    else if( surfaceType == SURFACE_2D) {
+        visual = DefaultVisual(display,screen);
+    } else if(surfaceType == SURFACE_NONE) {
         visual = CopyFromParent;
     }
-    if(visual == NULL) {
+    if(visual == NULL && surfaceType != SURFACE_NONE) { //CopyFromParent equals 0L
         if(surfaceType == SURFACE_GL) {
 # ifndef NG_GL_SUPPORT
             ng_err("no visual. 3D support not compiled!!!!");
@@ -2505,7 +2506,8 @@ nGResult nGSurface::createEGLSurface() {
 #endif
 
 #ifdef NG_TIMER_SUPPORT
-nGResult nGSurface::setTimer(size_t uid, size_t interval, nGTimer& timer) {
+nGResult nGSurface::setTimer(size_t uid, size_t a_interval, nGTimer& timer) {
+    long int interval = (long int)a_interval;
     nGResult result = RES_FAILED;
     timer.surface = this;
     timer.uid = uid;
