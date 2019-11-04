@@ -1,6 +1,6 @@
 **nanoGFX** is a small define driven graphics layer for x11,win,osx.
 
-###API:
+**API**
 
   **create(width,height,surfaceType,winAttr,parent)** - create surface with desired width, height, surface type, attributes (nGFlags - default 0) and parent window( default NULL)
    
