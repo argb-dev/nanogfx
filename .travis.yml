@@ -1,4 +1,7 @@
 language: cpp
+branches:
+  only:
+    - ng-test-2.2
 jobs:
   include:
     - os: linux
@@ -24,4 +27,4 @@ jobs:
             - libx11-dev
             - libgl1-mesa-dev
             - libglu1-mesa-dev
-      script: cd tests && . ./test_linux.sh yes
+      script: cd tests && . ./tests_linux.sh yes
