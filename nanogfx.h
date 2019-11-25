@@ -623,7 +623,10 @@ class nGSurface {
 
     void init();
 
-
+    /*========================================================================
+      nGSurface::rebuild2DSurface : rebuild 2d surface after resize
+      ========================================================================*/
+    void rebuild2DSurface();
 
     /*========================================================================
       nGSurface::handleResize : handle window resize
@@ -713,7 +716,7 @@ public:
     unsigned char* getSurface();
     unsigned int getWidth() const;
     unsigned int getHeight() const;
-    bool isValid();
+    bool isValid() const;
     /*========================================================================
       nGSurface::setWindowTitle : set new window title
       ========================================================================*/
@@ -757,6 +760,7 @@ nGSurface:setMouseCapture : enable/disable mouse capture
       nGSurface::setIcon : set icon for window
       ========================================================================*/
     void setIcon(unsigned char* data, unsigned int width, unsigned int height);
+
     /*========================================================================
       nGSurface::getHandle : returns surface handle
       ========================================================================*/
@@ -822,6 +826,9 @@ struct nGUtils {
 #endif
 #ifdef NG_EGL_SUPPORT
 #pragma message ("[ NANOGFX BUILD: 3d egl support enabled ]")
+#endif
+#ifdef NG_2D_SUPPORT
+#pragma message ("[ NANOGFX BUILD: 2d surface support enabled ]")
 #endif
 
 
@@ -1032,6 +1039,7 @@ LRESULT CALLBACK nGSurface::winCallback(HWND hwnd, UINT message, WPARAM wParam, 
             event.type = nGEvent::WINDOW_RESIZE;
             c->sWidth = lParam & 0xffff;
             c->sHeight = (lParam&0xffff0000)>>16;
+            c->handleResize();
             c->sendEvent(event);
             c->doRepaint();
             break;
@@ -1099,6 +1107,9 @@ void nGSurface::init()
   ========================================================================*/
 void nGSurface::handleResize()
 {
+#ifdef NG_2D_SUPPORT
+    rebuild2DSurface();
+#endif
 }
 
 /*========================================================================
@@ -1411,8 +1422,9 @@ nGResult nGSurface::destroy()
 #ifdef NG_2D_SUPPORT
         if( surfaceType == SURFACE_2D )
         {
-            if( screenImage)
+            if( screenImage) {
                 XDestroyImage(screenImage);
+            }
             screenImage = NULL;
             surface  = NULL;
             ng_dbg("!");
@@ -1534,8 +1546,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     static int attrSB[] = {GLX_RGBA, GLX_RED_SIZE, 4,  GLX_GREEN_SIZE, 4,  GLX_BLUE_SIZE, 4,  GLX_DEPTH_SIZE, 16,  None};
 # endif /*NG_GLX_SUPPORT */
     display = XOpenDisplay(NULL);
-    if(display == NULL)
-    {
+    if(display == NULL) {
         ng_err("couldn't open display");
         return RES_FAILED;
     }
@@ -1546,16 +1557,13 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     glXCreateContextAttribsARBProc glXCreateContextAttribsARB = 0;
     GLXFBConfig bestFbc = NULL;
 #endif
-    if( surfaceType == SURFACE_GL )
-    {
+    if( surfaceType == SURFACE_GL ) {
 # ifdef NG_GLX_SUPPORT
       int glx_major = 0, glx_minor = 0;
       if ( glXQueryVersion( display, &glx_major, &glx_minor) == 0 || ( (glx_major == 1) && (glx_minor < 3) ) || (glx_major < 1) ) {
         doublebuffer = true;
-
         vinfo = glXChooseVisual( display, screen, attrDB);
-        if( !vinfo)
-        {
+        if( !vinfo) {
             vinfo = glXChooseVisual( display, screen, attrSB );
             ng_dbg("no doublebuffering");
             doublebuffer=false;
@@ -1596,10 +1604,8 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
           vinfo = glXGetVisualFromFBConfig( display, bestFbc );
           visual = vinfo->visual;
           glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc) glXGetProcAddressARB( (const GLubyte *) "glXCreateContextAttribsARB" );
-
         }
       }
-
 # else
 # ifndef NG_EGL_SUPPORT
         ng_err("3d support not compiled!!!!");
@@ -1637,8 +1643,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     }
 #endif
 
-    if (! (winAttr & nGResize) )
-    {
+    if (! (winAttr & nGResize) ) {
         XSizeHints hints;
         memset(&hints, 0, sizeof(XSizeHints));
         hints.min_width = hints.max_width = width;
@@ -1646,8 +1651,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         hints.flags = PMaxSize | PMinSize;
         XSetWMNormalHints(display, window, &hints);
     }
-    if( winAttr & nGStayOnTop )
-    {
+    if( winAttr & nGStayOnTop ) {
         Atom wmStateAbove = XInternAtom( display, "_NET_WM_STATE_ABOVE", 1 );
         Atom wmNetWmState = XInternAtom( display, "_NET_WM_STATE", 1 );
         if( wmStateAbove != None ) {
@@ -1665,8 +1669,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
             XSendEvent( display, DefaultRootWindow( display ), False, SubstructureRedirectMask | SubstructureNotifyMask, (XEvent *)&xclient );
         }
     }
-    if( winAttr & nGNoTitleBar)
-    {
+    if( winAttr & nGNoTitleBar) {
 # define MWM_HINTS_DECORATIONS   (1L << 1)
         struct {
             unsigned long flags;
@@ -1690,28 +1693,24 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     XSetWMProtocols(display, window, &wmDeleteMessage, 1);
     XMapRaised(display, window);
 # ifdef NG_GLX_SUPPORT
-    if(glXCreateContextAttribsARB != NULL && NG_GL_VERSION_MAJOR >= 3) {
-      ng_dbg("set gl context!"); 
-      int context_attribs[] = { GLX_CONTEXT_MAJOR_VERSION_ARB, NG_GL_VERSION_MAJOR, GLX_CONTEXT_MINOR_VERSION_ARB, NG_GL_VERSION_MINOR,
-      GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
-      None };
-      glctx = glXCreateContextAttribsARB( display, bestFbc, 0, True, context_attribs );
-    }
-    else {
-        glctx = glXCreateContext( display, vinfo, 0, GL_TRUE);
-    }
-    if(glctx) {
-      XSync( display, False );
-      glXMakeCurrent( display, window, glctx );
+    if ( surfaceType == SURFACE_GL ) {
+       if(glXCreateContextAttribsARB != NULL && NG_GL_VERSION_MAJOR >= 3) {
+          int context_attribs[] = { GLX_CONTEXT_MAJOR_VERSION_ARB, NG_GL_VERSION_MAJOR, GLX_CONTEXT_MINOR_VERSION_ARB, NG_GL_VERSION_MINOR,
+                        GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
+                        None };
+          glctx = glXCreateContextAttribsARB( display, bestFbc, 0, True, context_attribs );
+        }
+      else {
+          glctx = glXCreateContext( display, vinfo, 0, GL_TRUE);
+      }
+      if(glctx) {
+        XSync( display, False );
+        glXMakeCurrent( display, window, glctx );
+      }
     }
 #endif
 # ifdef NG_2D_SUPPORT
-    if( surfaceType == SURFACE_2D )
-    {
-        if (winAttr & nGResize)
-        {
-            ng_err("WARNING: resizing not supported for 2d surface");
-        }
+    if( surfaceType == SURFACE_2D ) {
         gc = XCreateGC(display,window,0,0);
         depth = DefaultDepth(display,screen);
         surface = (unsigned char*)malloc(sWidth*sHeight*4);
@@ -1719,12 +1718,11 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     }
 # endif /*NG_2D_SUPPORT*/
 
-    if( surfaceType == SURFACE_GL)
-    {
+    if( surfaceType == SURFACE_GL) {
 # ifdef NG_GL_SUPPORT
       activate();
 #  ifdef NG_GLX_SUPPORT
-      if (!glXIsDirect(display, glctx)) {	ng_dbg("no direct rendering");}
+      if (!glXIsDirect(display, glctx)) { ng_dbg("no direct rendering");}
 #   endif //NG_GLX_SUPPORT
 # endif /*NG_GL_SUPPORT*/
     }
@@ -1736,17 +1734,12 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     sendEvent(ev);
 # endif
 #endif /*__nG_X11*/
-    ng_dbg("this: %p", this);
-
-
-
 
 #ifdef __nG_WIN32
 
     hInstance= GetModuleHandle(0);
     ng_dbg("this: %p", this);
-    if(getObjCountRef() == 0)
-    {
+    if(getObjCountRef() == 0) {
         memset(&getWindowClass(),0, sizeof(WNDCLASSEX));
         getWindowClass().cbSize = sizeof(WNDCLASSEX);
         getWindowClass().lpfnWndProc = winCallback;
@@ -1774,23 +1767,17 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     }
     else {
         winflags = WS_VISIBLE;
-        if (winAttr & nGNoTitleBar) winflags|=WS_POPUP;
+        if (winAttr & nGNoTitleBar) winflags |= WS_POPUP;
         else winflags=WS_OVERLAPPED | WS_SYSMENU;
-        if (winAttr & nGResize) winflags|= WS_THICKFRAME;
-        if (winAttr & nGMaximize) winflags|= WS_MAXIMIZEBOX;
-        if (winAttr & nGMinimize) winflags|= WS_MINIMIZEBOX;
+        if (winAttr & nGResize) winflags |= WS_THICKFRAME;
+        if (winAttr & nGMaximize) winflags |= WS_MAXIMIZEBOX;
+        if (winAttr & nGMinimize) winflags |= WS_MINIMIZEBOX;
     }
-
-    //if(parent!= NULL) {
     winflags |=WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-    //}
     const LPTSTR winName = TEXT(" ");
     handle = CreateWindowEx(WS_EX_APPWINDOW,getWindowClassName(), winName, winflags , x,y,sWidth, sHeight, NULL, NULL, hInstance, NULL);
-    if( handle)
-    {
+    if( handle) {
         if(parent!= NULL) { SetParent(handle, parent->handle);}
-        //      RECT rcClient, rcWindow;
-        //     POINT ptDiff = {0,0};
         SetWindowLongPtr(handle, GWLP_WNDPROC, GetWindowLongPtr(handle, GWLP_WNDPROC));
         SetWindowLongPtr( handle, GWLP_USERDATA , (LONG_PTR)this);
 
@@ -1807,8 +1794,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
                rcWindow.top = 20;
                }
              */
-            if(winAttr & nGDropShadow)
-            {
+            if(winAttr & nGDropShadow) {
                 SetClassLongPtr(handle,GCL_STYLE, CS_DROPSHADOW);
             }
             //	MoveWindow(handle,rcWindow.left, rcWindow.top, sWidth + ptDiff.x, sHeight + ptDiff.y, TRUE);
@@ -1816,28 +1802,22 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         }
         else {
             DEVMODE dmScreenSettings;                   // Device Mode
-            memset(&dmScreenSettings,0,sizeof(dmScreenSettings));       // Makes Sure Memory's Cleared
-            dmScreenSettings.dmSize=sizeof(dmScreenSettings);       // Size Of The Devmode Structure
-            dmScreenSettings.dmPelsWidth    = sWidth;            // Selected Screen Width
-            dmScreenSettings.dmPelsHeight   = sHeight;           // Selected Screen Height
-            dmScreenSettings.dmBitsPerPel   = GetDeviceCaps(GetDC(handle),BITSPIXEL);             // Selected Bits Per Pixel
-            dmScreenSettings.dmFields=DM_BITSPERPEL|DM_PELSWIDTH|DM_PELSHEIGHT;
-            ChangeDisplaySettings(&dmScreenSettings,CDS_FULLSCREEN);
+            memset(&dmScreenSettings, 0, sizeof(dmScreenSettings));
+            dmScreenSettings.dmSize = sizeof(dmScreenSettings);
+            dmScreenSettings.dmPelsWidth    = sWidth;
+            dmScreenSettings.dmPelsHeight   = sHeight;
+            dmScreenSettings.dmBitsPerPel   = GetDeviceCaps(GetDC(handle),BITSPIXEL);
+            dmScreenSettings.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
+            ChangeDisplaySettings(&dmScreenSettings, CDS_FULLSCREEN);
         }
 
-        if(winAttr & nGStayOnTop)
-        {
+        if(winAttr & nGStayOnTop) {
             RECT rect;
             GetWindowRect(handle, &rect );
             SetWindowPos(handle , HWND_TOPMOST,  rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_SHOWWINDOW);
         }
 
-        if(winAttr & nGKeepOnBottom)
-        {
-            //HWND desk = GetDesktopWindow();
-            //fprintf( stderr,"DESK: %p\n", desk);
-            //fprintf( stderr,"SETPARENT: %p, err :%d\n",SetParent(handle, desk), GetLastError());
-
+        if(winAttr & nGKeepOnBottom) {
             RECT rect;
             GetWindowRect(handle, &rect );
             SetWindowPos(handle , HWND_BOTTOM,  rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_SHOWWINDOW|SWP_NOOWNERZORDER);
@@ -1847,7 +1827,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         ShowWindow(handle,SW_SHOWDEFAULT);
         UpdateWindow(handle);
 
-        memset(&bmpinfo,0,sizeof(BITMAPINFO));
+        memset(&bmpinfo, 0, sizeof(BITMAPINFO));
         bmpinfo.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
         bmpinfo.bmiHeader.biPlanes = 1;
         bmpinfo.bmiHeader.biBitCount = 32;
@@ -1863,8 +1843,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         TrackMouseEvent(&tme);
 
 # ifdef NG_GL_SUPPORT
-        if( surfaceType == SURFACE_GL)
-        {
+        if( surfaceType == SURFACE_GL) {
             unsigned int pfdFlags = PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL;
             if(!(winAttr & nGResize)) {
                 pfdFlags |= PFD_DOUBLEBUFFER;
@@ -1875,15 +1854,12 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
                 //pfdFlags |= PFD_SUPPORT_GDI; //problem on amd
             }
             const static PIXELFORMATDESCRIPTOR pfd={sizeof(PIXELFORMATDESCRIPTOR),1,pfdFlags, PFD_TYPE_RGBA,
-                24,0,0,0,0,0,0,0,0,0,0,0,0,0,32,0,0,PFD_MAIN_PLANE,0,0,0,0};
+                24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0,PFD_MAIN_PLANE, 0, 0, 0, 0};
             SetPixelFormat(hdc, ChoosePixelFormat(hdc, &pfd), &pfd);
             int iPixelFormat = GetPixelFormat(hdc);
-
             PIXELFORMATDESCRIPTOR pfd2;
             memset(&pfd2, 0, sizeof(pfd2) );
             DescribePixelFormat(hdc, iPixelFormat, sizeof(PIXELFORMATDESCRIPTOR), &pfd2);
-            printf("PFD FLAGS: %08x dtw: %08x dbuf: %08x\n",pfd2.dwFlags, PFD_DRAW_TO_WINDOW, PFD_DOUBLEBUFFER );
-
             hrc = wglCreateContext(hdc);
             wglMakeCurrent(hdc,hrc );
             if(NG_GL_VERSION_MAJOR > 1) {
@@ -1912,8 +1888,7 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
 # endif /*NG_GL_SUPPORT*/
 
 # ifdef NG_2D_SUPPORT
-        if( surfaceType == SURFACE_2D)
-        {
+        if( surfaceType == SURFACE_2D) {
             surface = new unsigned char[sWidth*sHeight*4];
         }
 # endif /*NG_2D_SUPPORT*/
@@ -2057,6 +2032,7 @@ nGResult nGSurface::activate()
 {
 
     if( !valid) return RES_FAILED;
+    if(surfaceType != SURFACE_GL) return RES_OK;
 #ifdef NG_GL_SUPPORT
 #  ifdef NG_GLX_SUPPORT
     glXMakeCurrent(display, window, glctx);
@@ -2116,8 +2092,7 @@ void nGSurface::update()
 
 #ifdef __nG_OSX
 #  ifdef NG_GL_SUPPORT
-        if( surfaceType == SURFACE_GL)
-        {
+        if( surfaceType == SURFACE_GL) {
             [glView setNeedsDisplay:YES];
         }
         if( surfaceType == SURFACE_2D )
@@ -2146,7 +2121,7 @@ unsigned int nGSurface::getHeight() const{
 #endif
     return sHeight;
 };
-bool nGSurface::isValid() {  return valid; }
+bool nGSurface::isValid() const {  return valid; }
 
 /*========================================================================
   nGSurface::setWindowTitle : set new window title
@@ -2208,7 +2183,6 @@ void nGSurface::setMouseCapture(bool val)
   ========================================================================*/
 void nGSurface::move(int x, int y)
 {
-
     sX = x;
     sY = y;
 #ifdef __nG_X11
@@ -2226,6 +2200,32 @@ void nGSurface::move(int x, int y)
 }
 
 /*========================================================================
+  nGSurface::rebuild2DSurface : resize backbuffer for 2d surface
+  ========================================================================*/
+void nGSurface::rebuild2DSurface() 
+{
+# ifdef NG_2D_SUPPORT
+    if( surfaceType == SURFACE_2D ) {
+#ifdef __nG_X11
+      if(screenImage) {
+        XDestroyImage(screenImage);
+        surface = (unsigned char*)malloc(sWidth*sHeight*4);
+        screenImage = XCreateImage( display, visual, depth, ZPixmap, 0, (char*)surface, sWidth, sHeight, 32, sWidth*4);
+      }
+#endif //__nG_X11
+#ifdef __nG_WIN32
+      delete [] surface;
+      surface = new unsigned char[sWidth*sHeight*4];
+#endif //__nG_WIN32
+#ifdef __nG_OSX
+      delete [] surface;
+      surface = new unsigned char[sWidth*sHeight*4];
+#endif //__nG_OSX
+    }
+#endif //NG_2D_SUPPORT
+}
+
+/*========================================================================
   nGSurface::resize : resize window containing current surface
   ========================================================================*/
 void nGSurface::resize(int w, int h)
@@ -2233,7 +2233,7 @@ void nGSurface::resize(int w, int h)
     sWidth = w;
     sHeight = h;
 #ifdef __nG_X11
-    XMoveWindow(display,window,sX,sY);
+    XResizeWindow(display,window, w, h);
 #endif /*__nG_X11*/
 
 #ifdef __nG_WIN32
@@ -2250,6 +2250,7 @@ void nGSurface::resize(int w, int h)
     frame.size = sze;
     [handle setFrame: frame display : YES];
 #endif /*__nG_OSX*/
+    handleResize();
 }
 
 /*========================================================================
@@ -2262,7 +2263,7 @@ void nGSurface::resize(int x, int y, int w, int h)
     sWidth = w;
     sHeight = h;
 #ifdef __nG_X11
-    XMoveWindow(display,window,x,y);
+    XMoveResizeWindow(display,window,x,y, w, h);
 #endif /*__nG_X11*/
 
 #ifdef __nG_WIN32
@@ -2274,6 +2275,7 @@ void nGSurface::resize(int x, int y, int w, int h)
     NSRect frame = NSMakeRect(x,screen.size.height - h - y,w,h);
     [handle setFrame: frame display : YES];
 #endif /*__nG_OSX*/
+    handleResize();
 }
 
 /*========================================================================
@@ -2289,6 +2291,12 @@ void nGSurface::getPosition(int& x, int& y)
     //x = r.left;
     //y = r.top;
 #endif /*__nG_WIN32*/
+#ifdef __linux__
+  XWindowAttributes xwa;
+  XGetWindowAttributes(display, window, &xwa);
+  x = xwa.x;
+  y = xwa.y;
+#endif //__linux__
 }
 void nGSurface::setRenderEnabled(bool value) { renderEnabled = value; }
 
@@ -2303,31 +2311,30 @@ void nGSurface::setIcon(unsigned char* data, unsigned int width, unsigned int he
     Atom net_wm_icon = XInternAtom(display, "_NET_WM_ICON", False);
     Atom cardinal = XInternAtom(display, "CARDINAL", False);
     typedef unsigned long icoitem_t;
-    icoitem_t* data_rev = new icoitem_t[width*height + 2];
+    icoitem_t* data_rev = new icoitem_t[width * height + 2];
     icoitem_t* ptr = data_rev;
     ng_dbg("size: %lu", sizeof(icoitem_t));
     ptr[0] = width;
     ptr[1] = height;
     ptr+=2;
-    for(unsigned int i = 0; i < width*height*4;i+=4)
-    {
+    for(unsigned int i = 0; i < width * height * 4; i += 4) {
         icoitem_t val = ((((icoitem_t)data[i+3]) << 24) | (((icoitem_t)data[i]) << 16) | (((icoitem_t)data[i+1]) << 8) | ((icoitem_t)data[i+2]))  & 0xffffffff;
         *ptr = val;
         ++ptr;
     }
-    XChangeProperty(display, window, net_wm_icon, cardinal, 32, PropModeReplace, (const unsigned char*) data_rev, width*height+2);
+    XChangeProperty(display, window, net_wm_icon, cardinal, 32, PropModeReplace, (const unsigned char*) data_rev, width * height + 2);
+    delete [] data_rev;
 #endif /*__nG_X11*/
 
 
 #ifdef __nG_WIN32
 
-    unsigned char* data_rev = new unsigned char[width*height*4];
-    for(unsigned int i = 0; i < width*height*4;i+=4)
-    {
-        data_rev[i] = data[i+2];
-        data_rev[i+1] = data[i+1];
+    unsigned char* data_rev = new unsigned char[width * height * 4];
+    for(unsigned int i = 0; i < width * height * 4; i += 4) {
+        data_rev[i] = data[i + 2];
+        data_rev[i+1] = data[i + 1];
         data_rev[i+2] = data[i];
-        data_rev[i+3] = data[i+3];
+        data_rev[i+3] = data[i + 3];
     }
     HICON icon = CreateIcon(GetModuleHandle(NULL), width, height, 1, 32, NULL, data_rev);
     if (icon)
@@ -2346,9 +2353,9 @@ void nGSurface::setIcon(unsigned char* data, unsigned int width, unsigned int he
 
 #ifdef __nG_OSX
     CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault|kCGImageAlphaLast;
+    CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaLast;
     CGColorRenderingIntent renderingIntent = kCGRenderingIntentDefault;
-    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, data, width*height*4, nil);
+    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, data, width * height * 4, nil);
     CGImageRef cgref = CGImageCreate(width, height, 8, 32, width*4, space,bitmapInfo, provider, NULL, false , renderingIntent);
     CFRelease(space);
     NSImage *icon = [[NSImage alloc] autorelease];
@@ -2383,14 +2390,12 @@ void nGSurface::doRepaint()
     sendEvent(repaintEvent);
 #ifdef __nG_OSX
 # ifdef NG_GL_SUPPORT
-    if(surfaceType == SURFACE_GL)
-    {
+    if(surfaceType == SURFACE_GL) {
         [[glView openGLContext] flushBuffer];
     }
 # endif	/*NG_GL_SUPPORT*/
 # ifdef NG_2D_SUPPORT
-    if(surfaceType == SURFACE_2D)
-    {
+    if(surfaceType == SURFACE_2D) {
         imageRef = CGImageCreate(sWidth, sHeight, 8, 32, sWidth * 4, colorSpace, kCGImageAlphaLast | kCGBitmapByteOrderDefault, dataProvider, 0, false, kCGRenderingIntentDefault);
         NSRect frame = NSMakeRect(0,0,sWidth,sHeight);
         CGContextDrawImage((CGContextRef)[[NSGraphicsContext currentContext] graphicsPort], frame, imageRef);
@@ -2400,9 +2405,7 @@ void nGSurface::doRepaint()
 # endif /*NG_2D_SUPPORT*/
 #endif //__nG_OSX
 #ifdef __nG_WIN32
-    if( surfaceType == SURFACE_GL)
-    {
-
+    if( surfaceType == SURFACE_GL) {
 #  ifdef NG_GL_SUPPORT
         wglMakeCurrent(hdc,hrc );
         if(doublebuffer) {
@@ -2413,10 +2416,11 @@ void nGSurface::doRepaint()
         eglSwapBuffers(eglDisplay, eglSurface);
 #  endif
     }
-    else if( surfaceType == SURFACE_2D )
-    {
+#  ifdef NG_2D_SUPPORT
+    if( surfaceType == SURFACE_2D ) {
         StretchDIBits( hdc, 0, 0, sWidth, sHeight, 0, 0, sWidth, sHeight, surface, &bmpinfo, DIB_RGB_COLORS, SRCCOPY );
     }
+#  endif //NG_2D_SUPPORT
 #endif /*__nG_WIN32*/
 }
 
@@ -2697,6 +2701,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
     if(ng_ptr) {
         nanoGFX::nGEvent ev(do_init ? nanoGFX::nGEvent::WINDOW_CREATE :nanoGFX::nGEvent::WINDOW_RESIZE);
         do_init = false;
+        if(!do_init) {
+          ng_ptr->handleResize();
+        }
         ng_ptr->sendEvent(ev);
     }
     ng_dbg("reshape %.02f %.02f", [self frame].size.width, [self frame].size.height);
@@ -2724,6 +2731,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 - (void)windowDidResize:(NSNotification*) notification {
     if(ng_ptr) {
         nanoGFX::nGEvent ev(nanoGFX::nGEvent::WINDOW_RESIZE);
+        ng_ptr->handleResize();
         ng_ptr->sendEvent(ev);
     }
 }
