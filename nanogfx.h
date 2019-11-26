@@ -628,10 +628,6 @@ class nGSurface {
       ========================================================================*/
     void rebuild2DSurface();
 
-    /*========================================================================
-      nGSurface::handleResize : handle window resize
-      ========================================================================*/
-    void handleResize();
 
     /*========================================================================
       nGSurface::translateKeyCode : translate key code to used by nanoGFX
@@ -657,7 +653,6 @@ class nGSurface {
 #endif
 
 public:
-
 #ifdef __nG_WIN32
     static const LPTSTR getWindowClassName();
     static WNDCLASSEX& getWindowClass();
@@ -665,25 +660,31 @@ public:
 
     static int& getObjCountRef();
 
+    /*========================================================================
+      nGSurface::~nGSurface
+      ========================================================================*/
     nGSurface();
 
     /*========================================================================
-      nGSurface::~nGSurface : destructor
+      nGSurface::~nGSurface 
       ========================================================================*/
     ~nGSurface();
 
-
     /*========================================================================
-      nGSurface::destroy : destroy surface
+      nGSurface::destroy surface, release resources, native window
       ========================================================================*/
     nGResult destroy();
 
     /*========================================================================
-      nGSurface::setEventHandler : register surface event handler
+      nGSurface::setEventHandler : register surface event handler function
       ========================================================================*/
     void setEventHandler(nGEventHandler_f func, void* user_data);
 
+    /*========================================================================
+      nGSurface::setEventHandler : register surface event listener
+      ========================================================================*/
     void setEventHandler(nGEventListener* listener);
+
     /*========================================================================
       nGSurface::create : create new surface
       ========================================================================*/
@@ -713,10 +714,26 @@ public:
       ========================================================================*/
     void update();
 
+    /*========================================================================
+      nGSurface::getSurface()  - return rgba surface pointer
+      ========================================================================*/
     unsigned char* getSurface();
+
+    /*========================================================================
+      nGSurface::getWidth()
+      ========================================================================*/
     unsigned int getWidth() const;
-    unsigned int getHeight() const;
+
+    /*========================================================================
+      nGSurface::getHeight()
+      ========================================================================*/
+     unsigned int getHeight() const;
+
+    /*========================================================================
+      nGSurface::isValid : is surface properly created and wasn't destroyed
+      ========================================================================*/
     bool isValid() const;
+
     /*========================================================================
       nGSurface::setWindowTitle : set new window title
       ========================================================================*/
@@ -727,10 +744,9 @@ public:
       ========================================================================*/
     void setFocus( );
 
-
     /*========================================================================
-nGSurface:setMouseCapture : enable/disable mouse capture
-========================================================================*/
+      nGSurface:setMouseCapture : enable/disable mouse capture
+    ========================================================================*/
     void setMouseCapture(bool val);
 
     /*========================================================================
@@ -753,8 +769,10 @@ nGSurface:setMouseCapture : enable/disable mouse capture
       ========================================================================*/
     void getPosition(int& x, int& y);
 
+    /*========================================================================
+      nGSurface::setRenderEnabled : enable surface repainting during update step
+      ========================================================================*/
     void setRenderEnabled(bool value);
-
 
     /*========================================================================
       nGSurface::setIcon : set icon for window
@@ -766,9 +784,15 @@ nGSurface:setMouseCapture : enable/disable mouse capture
       ========================================================================*/
     void* getHandle();
 
+    /*========================================================================
+      nGSurface::handleResize : handle window resize - internal
+      ========================================================================*/
+    void handleResize();
 
+    /*========================================================================
+      nGSurface::doRepaint : repaints surface (...) - internal
+      ========================================================================*/
     void doRepaint();
-
 
 #ifdef NG_VULKAN_SUPPORT
     nGResult createVulkanSurface(VkInstance instance, VkSurfaceKHR* surface);
@@ -782,10 +806,15 @@ nGSurface:setMouseCapture : enable/disable mouse capture
     nGResult removeTimer(nGTimer& timer);
 #endif
 
+    /*========================================================================
+      nGSurface::run : static, initializes application (macos)
+      ========================================================================*/
     static void run();
 
+    /*========================================================================
+      nGSurface::shutdown : static, terminates application (macos)
+      ========================================================================*/
     static void shutdown();
-
 
 }; //nGSurface
 
