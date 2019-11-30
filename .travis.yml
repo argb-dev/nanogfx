@@ -28,5 +28,5 @@ jobs:
       script: cd tests && . ./tests_linux.sh yes
 #    - os: windows
       #language: cpp
-      script:       
-      - msbuild ng.msbuild /p:configuration=release
+#      script:       
+#- msbuild ng.msbuild /p:configuration=release
