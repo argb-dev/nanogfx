@@ -32,7 +32,7 @@ Quick Start:
 #ifndef DEF_NANOGFX_H
 #define DEF_NANOGFX_H
 
-#define NG_VERSION "2.2"
+#define NG_VERSION "2.x"
 
 /*========================================================================
   PLATFORM SETUP
