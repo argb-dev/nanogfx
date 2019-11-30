@@ -1,4 +1,5 @@
 language: cpp
+
 jobs:
   include:
     - os: linux
@@ -15,4 +16,17 @@ jobs:
       compiler:
        - clang
       script: make -f makefile.osx
-
+    - os: linux
+      compiler: 
+        - gcc
+      addons:
+        apt:
+          packages:
+            - libx11-dev
+            - libgl1-mesa-dev
+            - libglu1-mesa-dev
+      script: cd tests && . ./tests_linux.sh yes
+#    - os: windows
+      #language: cpp
+#      script:       
+#- msbuild ng.msbuild /p:configuration=release

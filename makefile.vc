@@ -1,6 +1,6 @@
 #sample vc makefile for test application
 CXX=cl
-CFLAGS=/I.   /DNG_GL_SUPPORT /DNG_TIMER_SUPPORT /DNG_THREAD_SUPPORT /O2
+CFLAGS=/I.  /DNG_TIMER_SUPPORT /DNG_THREAD_SUPPORT /O2
 LDFLAGS=kernel32.lib user32.lib gdi32.lib opengl32.lib
 OUT=test.exe
 all:
