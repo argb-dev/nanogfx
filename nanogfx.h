@@ -2171,6 +2171,9 @@ void nGSurface::setWindowTitle( const char* name)
     SetWindowTextA(handle, name);
 # endif /*_UNICODE*/
 #endif /*__nG_WIN32*/
+#ifdef __nG_OSX
+    [handle setTitle: [NSString stringWithUTF8String: name]];
+#endif
 }
 
 /*========================================================================
@@ -2186,6 +2189,9 @@ void nGSurface::setFocus( )
     ::SetFocus(handle);
     SwitchToThisWindow(handle, true);
 #endif /*__nG_WIN32*/
+#ifdef __nG_OSX
+    [[NSApp mainWindow] makeKeyAndOrderFront:handle];
+#endif //__nG_OSX
 }
 
 
@@ -2578,15 +2584,12 @@ void nGSurface::run() {
 #ifdef __nG_OSX
     [getAppHandlePtr() run];
 #endif
-#ifdef __nG_WIN32
-
-#endif
 }
 
 
 void nGSurface::shutdown() {
 #ifdef __nG_OSX
-    [getAppHandlePtr() terminate:nil];
+    [getAppHandlePtr() stop:nil];
 #endif
 }
 
