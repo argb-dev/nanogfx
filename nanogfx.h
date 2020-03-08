@@ -2247,6 +2247,8 @@ void nGSurface::rebuild2DSurface()
 #ifdef __nG_WIN32
       delete [] surface;
       surface = new unsigned char[sWidth*sHeight*4];
+      bmpinfo.bmiHeader.biWidth = sWidth;
+      bmpinfo.bmiHeader.biHeight = -(LONG)sHeight;
 #endif //__nG_WIN32
 #ifdef __nG_OSX
       delete [] surface;
