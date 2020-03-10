@@ -628,6 +628,10 @@ class nGSurface {
       ========================================================================*/
     void rebuild2DSurface();
 
+    /*========================================================================
+      nGSurface::adjustSize : adjust  window size to witdh and height of client area
+      ========================================================================*/
+    void adjustSize(size_t& width, size_t& height);
 
     /*========================================================================
       nGSurface::translateKeyCode : translate key code to used by nanoGFX
@@ -1810,23 +1814,13 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         SetWindowLongPtr(handle, GWLP_WNDPROC, GetWindowLongPtr(handle, GWLP_WNDPROC));
         SetWindowLongPtr( handle, GWLP_USERDATA , (LONG_PTR)this);
 
-        if(!(winAttr & nGFullscreen)) {
-            /*
-               GetWindowRect(handle, &rcWindow);
-               GetClientRect(handle, &rcClient);
-
-               ptDiff.x = (rcWindow.right - rcWindow.left) - rcClient.right;
-               ptDiff.y = (rcWindow.bottom - rcWindow.top) - rcClient.bottom;
-               if (winAttr & nGNoTitleBar)
-               {
-               rcWindow.left = 20;
-               rcWindow.top = 20;
-               }
-             */
+        if(!(winAttr & nGFullscreen)) {     
+            size_t width = sWidth, height = sHeight;
+            adjustSize(width, height);
+            BOOL res =MoveWindow(handle,sX, sY, width, height, TRUE);
             if(winAttr & nGDropShadow) {
                 SetClassLongPtr(handle,GCL_STYLE, CS_DROPSHADOW);
             }
-            //	MoveWindow(handle,rcWindow.left, rcWindow.top, sWidth + ptDiff.x, sHeight + ptDiff.y, TRUE);
 
         }
         else {
@@ -2225,7 +2219,9 @@ void nGSurface::move(int x, int y)
 #endif /*__nG_X11*/
 
 #ifdef __nG_WIN32
-    MoveWindow(handle,sX,sY, sWidth, sHeight, false);
+    size_t width = sWidth, height = sHeight;
+    adjustSize(width, height);
+    BOOL res =MoveWindow(handle,sX, sY, width, height, FALSE);    
 #endif /*__nG_WIN32*/
 
 #ifdef __nG_OSX
@@ -2251,6 +2247,8 @@ void nGSurface::rebuild2DSurface()
 #ifdef __nG_WIN32
       delete [] surface;
       surface = new unsigned char[sWidth*sHeight*4];
+      bmpinfo.bmiHeader.biWidth = sWidth;
+      bmpinfo.bmiHeader.biHeight = -(LONG)sHeight;
 #endif //__nG_WIN32
 #ifdef __nG_OSX
       delete [] surface;
@@ -2258,6 +2256,20 @@ void nGSurface::rebuild2DSurface()
 #endif //__nG_OSX
     }
 #endif //NG_2D_SUPPORT
+}
+
+/*========================================================================
+  nGSurface::adjustSize : adjust window client size to match provided width/height
+  ========================================================================*/
+void nGSurface::adjustSize(size_t& width, size_t& height) 
+{
+# ifdef __nG_WIN32
+    RECT rcWindow, rcClient;
+    GetWindowRect(handle, &rcWindow);
+    GetClientRect(handle, &rcClient);
+    width += (rcWindow.right - rcWindow.left) - rcClient.right;
+    height += (rcWindow.bottom - rcWindow.top) - rcClient.bottom;
+# endif //__nG_WIN32    
 }
 
 /*========================================================================
@@ -2276,7 +2288,9 @@ void nGSurface::resize(int w, int h)
     GetWindowRect(handle, &r);
     sX = r.left;
     sY = r.top;
-    MoveWindow(handle,sX, sY, sWidth, sHeight, false);
+    size_t width = sWidth, height = sHeight;
+    adjustSize(width, height);
+    BOOL res =MoveWindow(handle,sX, sY, width, height, TRUE);
 #endif /*__nG_WIN32*/
 
 #ifdef __nG_OSX
@@ -2302,7 +2316,9 @@ void nGSurface::resize(int x, int y, int w, int h)
 #endif /*__nG_X11*/
 
 #ifdef __nG_WIN32
-    MoveWindow(handle,sX, sY, sWidth, sHeight, false);
+    size_t width = sWidth, height = sHeight;
+    adjustSize(width, height);
+    BOOL res =MoveWindow(handle,sX, sY, width, height, TRUE);
 #endif /*__nG_WIN32*/
 
 #ifdef __nG_OSX
