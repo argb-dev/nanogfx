@@ -545,6 +545,7 @@ class nGSurface {
     unsigned char* surface;
     bool renderEnabled;
     bool doublebuffer;
+    nGSurface* parent;
 
 #ifdef __nG_X11
     XImage* screenImage;
@@ -787,6 +788,11 @@ public:
       nGSurface::getHandle : returns surface handle
       ========================================================================*/
     void* getHandle();
+
+    /*========================================================================
+      nGSurface::getParent : returns surface parent
+      ========================================================================*/
+    nGSurface* getParent() { return parent;}
 
     /*========================================================================
       nGSurface::handleResize : handle window resize - internal
@@ -1411,7 +1417,7 @@ int& nGSurface::getObjCountRef() {
     return objcount;
 }
 
-nGSurface::nGSurface() :  sWidth(0),sHeight(0), surface(NULL), renderEnabled(true), valid(false), keyMask(KEYMOD_NONE), surfaceType(SURFACE_NONE), nGEventHandler(NULL), nGEventHandlerUData(NULL), eventListener(NULL)
+nGSurface::nGSurface() :  sWidth(0),sHeight(0), surface(NULL), renderEnabled(true), parent(NULL), valid(false), keyMask(KEYMOD_NONE), surfaceType(SURFACE_NONE), nGEventHandler(NULL), nGEventHandlerUData(NULL), eventListener(NULL)
 #ifdef NG_GLX_SUPPORT
     ,glctx(NULL)
 #endif
@@ -1556,13 +1562,14 @@ void nGSurface::setEventHandler(nGEventListener* listener)
 /*========================================================================
   nGSurface::create : create new surface
   ========================================================================*/
-nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType _surfaceType,unsigned int a_winAttr, nGSurface* parent)
+nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType _surfaceType,unsigned int a_winAttr, nGSurface* a_parent)
 {
     // nGMutexLocker m(ngMtx);
     winAttr = a_winAttr;
     sWidth = width;
     sHeight = height;
     surfaceType = _surfaceType;
+    parent = a_parent;
     nGResult result = RES_FAILED;
 
 #ifdef __nG_X11
@@ -1947,6 +1954,9 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         mask  |= NSWindowStyleMaskResizable;
     }
     handle = [[nGWindow alloc] initWithContentRect:frame styleMask:mask backing:NSBackingStoreBuffered defer:NO];
+    if(parent) {
+        [(nGWindow*)parent->getHandle() addChildWindow: handle ordered: NSWindowAbove];
+    }
     if(winAttr & nGFullscreen) {
         [handle setLevel:NSMainMenuWindowLevel+1];
         [handle setHidesOnDeactivate:YES];
@@ -1975,13 +1985,13 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         CGDataProviderDirectCallbacks providerCallbacks = {0,dataProviderSurfacePtr, deleteSurfaceData,0,0};
         colorSpace = CGColorSpaceCreateDeviceRGB();
         dataProvider = CGDataProviderCreateDirect(this, sWidth*sHeight*4,	&providerCallbacks);
-        imageRef = CGImageCreate(sWidth, sHeight, 8, 32, sWidth * 4, colorSpace, kCGImageAlphaLast | kCGBitmapByteOrderDefault, dataProvider, 0, false, kCGRenderingIntentDefault);
+        imageRef = CGImageCreate(sWidth, sHeight, 8, 32, sWidth * 4, colorSpace, kCGImageAlphaLast | kCGBitmapByteOrder32Big, dataProvider, 0, false, kCGRenderingIntentDefault);
         image = [[NSImage alloc] initWithCGImage: imageRef size:frame.size];
         imageView = [[nGImageView alloc] init];
         imageView.ng_ptr = this;
         imageView.do_init = true;
         [imageView setImage:image];
-        [image drawInRect:frame];
+ //       [image drawInRect:frame];
 
         [imageView addTrackingRect:frame owner:imageView userData:NULL assumeInside:NO];
         [handle setContentView:imageView];
@@ -2133,14 +2143,14 @@ void nGSurface::update()
 unsigned char* nGSurface::getSurface() { return surface; }
 unsigned int nGSurface::getWidth() const{
 #ifdef __nG_OSX
-    return [handle frame].size.width;
+    return [handle contentRectForFrameRect: [handle frame]].size.width;
 #endif
 
     return sWidth;
 };
 unsigned int nGSurface::getHeight() const{
 #ifdef __nG_OSX
-    return [handle frame].size.height;
+    return [handle contentRectForFrameRect: [handle frame]].size.height;
 #endif
     return sHeight;
 };
@@ -2225,8 +2235,18 @@ void nGSurface::move(int x, int y)
 #endif /*__nG_WIN32*/
 
 #ifdef __nG_OSX
-    NSRect screen = [[NSScreen mainScreen] frame];
-    [handle setFrameTopLeftPoint:NSMakePoint(x,screen.size.height -sHeight - y)];
+    NSRect frame = [handle frame];
+    if(parent != NULL) {
+        NSRect parentRect = [(nGWindow*)parent->getHandle() frame];
+        frame.origin.x = parentRect.origin.x + x;
+        frame.origin.y = parentRect.origin.y + [(nGWindow*)parent->getHandle() contentRectForFrameRect: parentRect].size.height - frame.size.height - y;
+    }
+    else {
+        NSRect screen = [[NSScreen mainScreen] frame];
+        frame.origin.x = x;
+        frame.origin.y = screen.size.height - sHeight - y;
+    }
+    [handle setFrame: frame display : NO];
 #endif
 }
 
@@ -2240,19 +2260,35 @@ void nGSurface::rebuild2DSurface()
 #ifdef __nG_X11
       if(screenImage) {
         XDestroyImage(screenImage);
-        surface = (unsigned char*)malloc(sWidth*sHeight*4);
+        surface = (unsigned char*)malloc(sWidth * sHeight * 4);
         screenImage = XCreateImage( display, visual, depth, ZPixmap, 0, (char*)surface, sWidth, sHeight, 32, sWidth*4);
       }
 #endif //__nG_X11
 #ifdef __nG_WIN32
       delete [] surface;
-      surface = new unsigned char[sWidth*sHeight*4];
+      surface = new unsigned char[sWidth * sHeight * 4];
       bmpinfo.bmiHeader.biWidth = sWidth;
       bmpinfo.bmiHeader.biHeight = -(LONG)sHeight;
 #endif //__nG_WIN32
 #ifdef __nG_OSX
+      NSRect contentRect = [handle contentRectForFrameRect: [handle frame] ];
+      sWidth = contentRect.size.width;
+      sHeight = contentRect.size.height;
       delete [] surface;
-      surface = new unsigned char[sWidth*sHeight*4];
+      surface = new unsigned char[sWidth * sHeight * 4];
+      if(image) [image release];
+      if(imageView) [imageView release];
+      if(imageRef != nil) CGImageRelease(imageRef);
+      CGDataProviderRelease(dataProvider);
+      CGDataProviderDirectCallbacks providerCallbacks = {0,dataProviderSurfacePtr, deleteSurfaceData,0,0};
+      dataProvider = CGDataProviderCreateDirect(this, sWidth*sHeight*4,	&providerCallbacks);
+      imageRef = CGImageCreate(sWidth, sHeight, 8, 32, sWidth * 4, colorSpace, kCGImageAlphaLast | kCGBitmapByteOrder32Big, dataProvider, 0, false, kCGRenderingIntentDefault);
+      image = [[NSImage alloc] initWithCGImage: imageRef size:contentRect.size];
+      imageView = [[nGImageView alloc] init];
+      imageView.ng_ptr = this;
+      [imageView setImage:image];
+      [imageView addTrackingRect:contentRect owner:imageView userData:NULL assumeInside:NO];
+      [handle setContentView:imageView];
 #endif //__nG_OSX
     }
 #endif //NG_2D_SUPPORT
@@ -2294,10 +2330,9 @@ void nGSurface::resize(int w, int h)
 #endif /*__nG_WIN32*/
 
 #ifdef __nG_OSX
-    NSSize sze = NSMakeSize(w, h);
     NSRect frame = [handle frame];
-    frame.size = sze;
-    [handle setFrame: frame display : YES];
+    frame.size = NSMakeSize(w, h);
+    [handle setFrame: frame display : NO];
 #endif /*__nG_OSX*/
     handleResize();
 }
@@ -2322,9 +2357,20 @@ void nGSurface::resize(int x, int y, int w, int h)
 #endif /*__nG_WIN32*/
 
 #ifdef __nG_OSX
-    NSRect screen = [[NSScreen mainScreen] frame];
-    NSRect frame = NSMakeRect(x,screen.size.height - h - y,w,h);
-    [handle setFrame: frame display : YES];
+    NSRect frame = [handle frame];
+    frame.size.width = w;
+    frame.size.height = h;
+    if(parent != NULL) {
+        NSRect parentRect = [(nGWindow*)parent->getHandle() frame];
+        frame.origin.x = parentRect.origin.x + x;
+        frame.origin.y = parentRect.origin.y + [(nGWindow*)parent->getHandle() contentRectForFrameRect: parentRect].size.height - frame.size.height - y;
+    }
+    else {
+        NSRect screen = [[NSScreen mainScreen] frame];
+        frame.origin.x = x;
+        frame.origin.y = screen.size.height - sHeight - y;
+    }
+    [handle setFrame: frame display : NO];
 #endif /*__nG_OSX*/
     handleResize();
 }
@@ -2383,9 +2429,9 @@ void nGSurface::setIcon(unsigned char* data, unsigned int width, unsigned int he
     unsigned char* data_rev = new unsigned char[width * height * 4];
     for(unsigned int i = 0; i < width * height * 4; i += 4) {
         data_rev[i] = data[i + 2];
-        data_rev[i+1] = data[i + 1];
-        data_rev[i+2] = data[i];
-        data_rev[i+3] = data[i + 3];
+        data_rev[i + 1] = data[i + 1];
+        data_rev[i + 2] = data[i];
+        data_rev[i + 3] = data[i + 3];
     }
     HICON icon = CreateIcon(GetModuleHandle(NULL), width, height, 1, 32, NULL, data_rev);
     if (icon)
@@ -2404,7 +2450,7 @@ void nGSurface::setIcon(unsigned char* data, unsigned int width, unsigned int he
 
 #ifdef __nG_OSX
     CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaLast;
+    CGBitmapInfo bitmapInfo = kCGBitmapByteOrder32Big | kCGImageAlphaLast;
     CGColorRenderingIntent renderingIntent = kCGRenderingIntentDefault;
     CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, data, width * height * 4, nil);
     CGImageRef cgref = CGImageCreate(width, height, 8, 32, width*4, space,bitmapInfo, provider, NULL, false , renderingIntent);
@@ -2434,7 +2480,9 @@ void nGSurface::doRepaint()
     if(!doublebuffer) {
 #ifdef __nG_OSX
 # ifdef NG_GL_SUPPORT
+    if(surfaceType == SURFACE_GL) {
         glDrawBuffer(GL_FRONT);
+    }
 # endif /*NG_GL_SUPPORT*/
 #endif
     }
@@ -2447,9 +2495,14 @@ void nGSurface::doRepaint()
 # endif	/*NG_GL_SUPPORT*/
 # ifdef NG_2D_SUPPORT
     if(surfaceType == SURFACE_2D) {
-        imageRef = CGImageCreate(sWidth, sHeight, 8, 32, sWidth * 4, colorSpace, kCGImageAlphaLast | kCGBitmapByteOrderDefault, dataProvider, 0, false, kCGRenderingIntentDefault);
+        imageRef = CGImageCreate(sWidth, sHeight, 8, 32, sWidth * 4, colorSpace, kCGImageAlphaLast | kCGBitmapByteOrder32Big, dataProvider, 0, false, kCGRenderingIntentDefault);
         NSRect frame = NSMakeRect(0,0,sWidth,sHeight);
-        CGContextDrawImage((CGContextRef)[[NSGraphicsContext currentContext] graphicsPort], frame, imageRef);
+        if([NSGraphicsContext currentContext] != nullptr) {
+           CGContextDrawImage((CGContextRef)[[NSGraphicsContext currentContext] graphicsPort], frame, imageRef);
+        }
+        else {
+            ng_err("context is null!")
+        }
         CGImageRelease(imageRef);
         imageRef = nil;
     }
@@ -2721,6 +2774,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 }
 
 - (void)prepareOpenGL {
+    [super prepareOpenGL];
     GLint swapInt = 1;
     [[self openGLContext] setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
 #if 1
@@ -2744,6 +2798,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 
 
 -(void)reshape {
+    [super reshape];
     [[self openGLContext] makeCurrentContext];
     [[self openGLContext] update];
     if(ng_ptr) {
@@ -2863,7 +2918,15 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
         NSRect screen = [[NSScreen mainScreen] frame];
         //ev.data.mouse.button = [a_Event buttonNumber];
         ev.data.mouse.x = curPoint.x > 0 ? curPoint.x : 0;
-        ev.data.mouse.y = curPoint.y > 0 ? ng_ptr->getHeight() - curPoint.y: ng_ptr->getHeight();
+        ev.data.mouse.y = curPoint.y > 0 ? ng_ptr->getHeight() - curPoint.y: ng_ptr->getHeight();       
+#if 0
+        NSRect contentRect = [self contentRectForFrameRect: self.frame];
+        int dx = contentRect.origin.x - self.frame.origin.x;
+        int dy = contentRect.origin.y - self.frame.origin.y + self.frame.size.height - contentRect.size.height;
+        ev.data.mouse.x -= dx;
+        ev.data.mouse.y -= dy;
+#endif
+
         ev.data.mouse.root_x = [NSEvent mouseLocation].x;
         ev.data.mouse.root_y = screen.size.height - [NSEvent mouseLocation].y;
         ng_ptr->sendEvent(ev);
