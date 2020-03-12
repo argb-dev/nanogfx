@@ -16,6 +16,10 @@ jobs:
       compiler:
        - clang
       script: make -f makefile.osx
+    - os: osx
+      compiler: 
+        - gcc
+      script: cd tests && . ./tests_macos.sh
     - os: linux
       compiler: 
         - gcc

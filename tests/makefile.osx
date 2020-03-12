@@ -1,0 +1,9 @@
+#sample osx makefile for test application
+CXX=clang
+CFLAGS=-I.. -Wall -Wextra  -Wno-unused-parameter -ObjC++ 
+LDFLAGS= -framework CoreVideo -framework Cocoa -lstdc++ 
+OUT=test.elf
+METAL_FLAGS=-framework Metal -framework MetalKit
+metal:
+		rm -f test.elf
+		$(CXX) $(CFLAGS) test_metal.cpp -o $(OUT)  $(LDFLAGS) $(METAL_FLAGS)
