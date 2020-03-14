@@ -127,6 +127,10 @@ Quick Start:
 # ifdef NG_THREAD_SUPPORT
 #   include <pthread.h>
 # endif
+# ifdef NG_METAL_SUPPORT
+#   include <MetalKit/MetalKit.h>
+#   include <Metal/Metal.h>
+# endif
 #endif
 
 
@@ -182,6 +186,19 @@ class nGSurface;
 @property (nonatomic,assign) nanoGFX::nGSurface* ng_ptr;
 @end
 #endif /* NG_GL_SUPPORT*/
+
+#ifdef NG_METAL_SUPPORT
+@interface nGMetalView : MTKView {
+    id<MTLDevice> device;
+    CVDisplayLinkRef displayLink;
+    bool isFullscreen;
+    bool do_init;
+}
+- (id) getDevice;
+@property (nonatomic,assign) nanoGFX::nGSurface* ng_ptr;
+@end
+#endif /* NG_METAL_SUPPORT*/
+
 
 
 #ifdef NG_2D_SUPPORT
@@ -578,6 +595,9 @@ class nGSurface {
 # ifdef NG_GL_SUPPORT
     nGOpenGLView* glView;
 # endif /*NG_GL_SUPPORT*/
+# ifdef NG_METAL_SUPPORT
+    nGMetalView* metalView;
+#endif //NG_METAL_SUPPORT
 
 # ifdef NG_2D_SUPPORT
     NSImage* image;
@@ -790,6 +810,11 @@ public:
     void* getHandle();
 
     /*========================================================================
+      nGSurface::getDevice : returns surface device
+      ========================================================================*/
+    void* getDevice();
+
+    /*========================================================================
       nGSurface::getParent : returns surface parent
       ========================================================================*/
     nGSurface* getParent() { return parent;}
@@ -808,9 +833,15 @@ public:
     nGResult createVulkanSurface(VkInstance instance, VkSurfaceKHR* surface);
 
 #endif
+
 #ifdef NG_EGL_SUPPORT
     nGResult createEGLSurface();
 #endif
+
+#ifdef NG_METAL_SUPPORT
+    nGResult createMetalSurface();
+#endif
+
 #ifdef NG_TIMER_SUPPORT
     nGResult setTimer(size_t uid, size_t interval, nGTimer& timer);
     nGResult removeTimer(nGTimer& timer);
@@ -1525,6 +1556,12 @@ nGResult nGSurface::destroy()
 
 # ifdef NG_GL_SUPPORT
         if(glView) [glView release];
+        glView = nil;
+# endif /*NG_GL_SUPPORT*/
+
+# ifdef NG_METAL_SUPPORT
+        if(metalView) [metalView release];
+        metalView = nil;
 # endif /*NG_GL_SUPPORT*/
         if(handle) [handle release];
 
@@ -2128,8 +2165,13 @@ void nGSurface::update()
         if( surfaceType == SURFACE_GL) {
             [glView setNeedsDisplay:YES];
         }
-        if( surfaceType == SURFACE_2D )
 #  endif //NG_GL_SUPPORT
+# ifdef NG_METAL_SUPPORT
+        if(metalView) {
+            [metalView setNeedsDisplay:YES];
+        }
+# endif //NG_METAL_SUPPORT
+        if( surfaceType == SURFACE_2D )
         {
 # ifdef NG_2D_SUPPORT
             [imageView setNeedsDisplay:YES];
@@ -2471,6 +2513,13 @@ void* nGSurface::getHandle()
     return (void*)handle;
 }
 
+void* nGSurface::getDevice()
+{
+#ifdef NG_METAL_SUPPORT
+    return [metalView getDevice];
+#endif
+    return NULL;
+}
 
 
 void nGSurface::doRepaint()
@@ -2612,6 +2661,19 @@ nGResult nGSurface::createEGLSurface() {
   return result;
 }
 #endif
+
+#ifdef NG_METAL_SUPPORT
+nGResult nGSurface::createMetalSurface() {
+    nGResult result = RES_FAILED;
+    metalView = [[nGMetalView alloc] initWithFrame: [handle frame]];
+    if(metalView) {
+        metalView.ng_ptr = this;
+        [handle setContentView: metalView];
+        result = RES_OK;
+    }
+    return result;
+}
+#endif /* NG_METAL_SUPPORT */
 
 #ifdef NG_TIMER_SUPPORT
 nGResult nGSurface::setTimer(size_t uid, size_t a_interval, nGTimer& timer) {
@@ -2798,7 +2860,6 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
 
 
 -(void)reshape {
-    [super reshape];
     [[self openGLContext] makeCurrentContext];
     [[self openGLContext] update];
     if(ng_ptr) {
@@ -2816,6 +2877,53 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink, const CVTimeSt
     return YES;
 }
 
+
+@end
+
+#endif /*NG_GL_SUPPORT*/
+
+/*========================================================================
+  nGMetalView osx 3d metal surface implementation
+  ========================================================================*/
+#ifdef NG_METAL_SUPPORT
+@implementation nGMetalView
+@synthesize ng_ptr;
+
+
+- (id) initWithFrame: (NSRect)frame
+{
+    do_init = true;
+    device = MTLCreateSystemDefaultDevice();
+
+    return self = [super initWithFrame:frame device: device];
+}
+
+- (id) getDevice {
+    return device;
+}
+
+- (void) dealloc
+{
+    [device release];
+    device = nil;
+    if(displayLink  && CVDisplayLinkIsRunning(displayLink)) {
+        CVDisplayLinkStop(displayLink);
+    }
+    CVDisplayLinkRelease(displayLink);
+    [super dealloc];
+}
+
+-(void)drawRect:(NSRect)dirtyRect {
+    if(!displayLink  || !CVDisplayLinkIsRunning(displayLink)) {
+        if(ng_ptr) {
+            ng_ptr->doRepaint();
+        }
+    }
+}
+
+-(BOOL)acceptsFirstResponder {
+    return YES;
+}
 
 @end
 

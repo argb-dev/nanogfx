@@ -1,4 +1,4 @@
-**nanoGFX** is a small define driven graphics layer for x11,win,osx.
+**nanoGFX** is a small define driven graphics layer for x11,win,macos.
 
 **API**
 
@@ -9,6 +9,11 @@
    * *SURFACE_2D* - creates a 2D surface with 32bpp RGBA backbuffer accessed with getSurface() method
    *  *SURFACE_GL* - creates a surface with OpenGL context
    * *SURFACE_NONE* - creates a window without attached surface
+
+   if *SURFACE_NONE* is selected - following surfaces can be attached:
+     *EGL* - createEGLSurface()
+     *Vulkan* - createVulkanSurface(VkInstance, VkSurfaceKHR*)
+     *Metal* - createMetalSurface()
 
 
   allowed attributes are currently:

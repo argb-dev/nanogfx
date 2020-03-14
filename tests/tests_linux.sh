@@ -30,5 +30,5 @@ run_test test_gl.cpp "-lGL -lGLU"
 let res=res+$?
 run_test test_gl_legacy.cpp "-lGL -lGLU"
 let res=res+$?
-return ${res}
+exit ${res}
 
