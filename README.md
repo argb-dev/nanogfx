@@ -7,13 +7,13 @@
    allowed surface types are:
 
    * *SURFACE_2D* - creates a 2D surface with 32bpp RGBA backbuffer accessed with getSurface() method
-   *  *SURFACE_GL* - creates a surface with OpenGL context
+   * *SURFACE_GL* - creates a surface with OpenGL context
    * *SURFACE_NONE* - creates a window without attached surface
 
    if *SURFACE_NONE* is selected - following surfaces can be attached:
-     *EGL* - createEGLSurface()
-     *Vulkan* - createVulkanSurface(VkInstance, VkSurfaceKHR*)
-     *Metal* - createMetalSurface()
+   * *EGL* - createEGLSurface()
+   * *Vulkan* - createVulkanSurface(VkInstance, VkSurfaceKHR*)
+   * *Metal* - createMetalSurface()
 
 
   allowed attributes are currently:
