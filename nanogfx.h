@@ -805,8 +805,8 @@ public:
     void doRepaint();
 
 #ifdef NG_VULKAN_SUPPORT
+    const char** getVulkanRequiredExtensions(uint32_t& count);
     nGResult createVulkanSurface(VkInstance instance, VkSurfaceKHR* surface);
-
 #endif
 #ifdef NG_EGL_SUPPORT
     nGResult createEGLSurface();
@@ -1585,6 +1585,9 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     };
     static int attrSB[] = {GLX_RGBA, GLX_RED_SIZE, 4,  GLX_GREEN_SIZE, 4,  GLX_BLUE_SIZE, 4,  GLX_DEPTH_SIZE, 16,  None};
 # endif /*NG_GLX_SUPPORT */
+    if(getObjCountRef() == 0) {
+        XInitThreads();
+    }
     display = XOpenDisplay(NULL);
     if(display == NULL) {
         ng_err("couldn't open display");
@@ -1657,7 +1660,8 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     else if( surfaceType == SURFACE_2D) {
         visual = DefaultVisual(display,screen);
     } else if(surfaceType == SURFACE_NONE) {
-        visual = CopyFromParent;
+        //visual = CopyFromParent; //why did i put it here, does not work !?
+        visual = DefaultVisual(display,screen);
     }
     if(visual == NULL && surfaceType != SURFACE_NONE) { //CopyFromParent equals 0L
         if(surfaceType == SURFACE_GL) {
@@ -2531,6 +2535,17 @@ void nGSurface::doRepaint()
 
 
 #ifdef NG_VULKAN_SUPPORT
+const char** nGSurface::getVulkanRequiredExtensions(uint32_t& count) {
+    static const char** result = NULL;
+    count = 0;
+#ifdef __nG_X11
+    static const char* ext[] = {"VK_KHR_surface", "VK_KHR_xlib_surface"};
+    count = 2;
+    result = ext;
+#endif
+    return result;
+}
+
 nGResult nGSurface::createVulkanSurface(VkInstance instance, VkSurfaceKHR* surface) {
     nGResult result = RES_FAILED;
 #ifdef __nG_X11

@@ -5,3 +5,5 @@ LDFLAGS= -lX11 -lrt
 OUT=test.elf
 all:
 		$(CXX) $(CFLAGS) *.cpp -o $(OUT)  $(LDFLAGS) 
+vulkan:
+		$(CXX) $(CFLAGS) test_vulkan.cpp -o $(OUT)  $(LDFLAGS)  -lvulkan
