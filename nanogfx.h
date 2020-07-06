@@ -1161,7 +1161,7 @@ void nGSurface::init()
     visual = NULL;
     gc = 0;
     depth = 0;
-    screen  =0;
+    screen = 0;
     iconPixmap = 0;
 #endif /*__nG_X11*/
 #ifdef __nG_WIN32
@@ -1169,6 +1169,15 @@ void nGSurface::init()
     handle = 0;
     hdc = 0;
 #endif /*__nG_WIN32*/
+#ifdef __nG_OSX
+    handle = 0;
+# ifdef NG_GL_SUPPORT
+    glView = 0;
+# endif /*NG_GL_SUPPORT*/
+# ifdef NG_METAL_SUPPORT
+    metalView = 0;
+# endif //NG_METAL_SUPPORT
+#endif
 }
 
 
