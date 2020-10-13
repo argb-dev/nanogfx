@@ -1723,11 +1723,6 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     attr.colormap = XCreateColormap(display, parent_window, visual, AllocNone);
     window = XCreateWindow(display, parent_window, 0, 0, width, height, CopyFromParent, CopyFromParent, InputOutput, visual, eventMask , &attr);
 
-#ifdef NG_GLX_SUPPORT
-    if(vinfo) {
-      XFree(vinfo);
-    }
-#endif
 
     if (! (winAttr & nGResize) ) {
         XSizeHints hints;
@@ -1793,6 +1788,10 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
         XSync( display, False );
         glXMakeCurrent( display, window, glctx );
       }
+    }
+    if(vinfo) {
+      XFree(vinfo);
+      vinfo = NULL;
     }
 #endif
 # ifdef NG_2D_SUPPORT
