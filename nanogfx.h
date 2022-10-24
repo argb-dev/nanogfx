@@ -243,15 +243,19 @@ struct nGEventListener {
   ========================================================================*/
 enum nGFlags{
     nGResize =1,
-    nGMaximize =2,
-    nGMinimize =4,
+    nGMaximize =2, //show maximize button
+    nGMinimize =4, //show minimize button
     nGNoTitleBar = 8,
     nGDropShadow = 16,
     nGStayOnTop = 32,
     nGFullscreen = 64,
-    nGMaximized = 128,
+    nGMaximized = 128, //show maximized
     nGHideInTaskBar = 256,
-    nGKeepOnBottom = 512
+    nGKeepOnBottom = 512,
+    nGMinimized = 1024, //show minimized
+    nGHidden = 2048,
+
+    nGDefault = 0
 };
 
 /*========================================================================
@@ -562,6 +566,7 @@ class nGSurface {
     unsigned char* surface;
     bool renderEnabled;
     bool doublebuffer;
+    bool dirty;
     nGSurface* parent;
 
 #ifdef __nG_X11
@@ -733,6 +738,11 @@ public:
       nGSurface::activate : activate current surface
       ========================================================================*/
     nGResult activate();
+
+    /*========================================================================
+      nGSurface::setState : activate current surface
+      ========================================================================*/
+    nGResult setState(unsigned int a_winAttr);
 
     /*========================================================================
       nGSurface::update : draw and get events
@@ -1703,7 +1713,8 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     else if( surfaceType == SURFACE_2D) {
         visual = DefaultVisual(display,screen);
     } else if(surfaceType == SURFACE_NONE) {
-        visual = CopyFromParent;
+        visual = DefaultVisual(display,screen); 
+ //TODO check parent visual?
     }
     if(visual == NULL && surfaceType != SURFACE_NONE) { //CopyFromParent equals 0L
         if(surfaceType == SURFACE_GL) {
@@ -1744,9 +1755,6 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
             xclient.format = 32;
             xclient.data.l[0] = 1;//_NET_WM_STATE_ADD;
             xclient.data.l[1] = wmStateAbove;
-            xclient.data.l[2] = 0;
-            xclient.data.l[3] = 0;
-            xclient.data.l[4] = 0;
             XSendEvent( display, DefaultRootWindow( display ), False, SubstructureRedirectMask | SubstructureNotifyMask, (XEvent *)&xclient );
         }
     }
@@ -1772,7 +1780,9 @@ nGResult nGSurface::create(unsigned int width, unsigned int height,nGSurfaceType
     }
     wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", false);
     XSetWMProtocols(display, window, &wmDeleteMessage, 1);
-    XMapRaised(display, window);
+    if(!(winAttr & nGHidden)) {
+        XMapRaised(display, window);
+    }
 # ifdef NG_GLX_SUPPORT
     if ( surfaceType == SURFACE_GL ) {
        if(glXCreateContextAttribsARB != NULL && NG_GL_VERSION_MAJOR >= 3) {
@@ -2128,6 +2138,53 @@ nGResult nGSurface::activate()
 #endif
     return RES_OK;
 }
+/*========================================================================
+  nGSurface::setState : activate current surface
+  ========================================================================*/
+nGResult nGSurface::setState(unsigned int a_winAttr)
+{
+    nGResult result = RES_FAILED;
+    if( !valid) return RES_FAILED;
+#ifdef __nG_WIN32
+    HWND hwnd = (HWND)handle;
+    int cmd = 0;
+    if(state & nGHidden) {
+        cmd = SW_HIDE;
+    } 
+    else if(state & nGMaximized) {
+        cmd = SW_SHOWMAXIMIZED;  
+    }
+    else if(state & nGMinimize) {
+        cmd = state & WMS_NOACTIVATE ? SW_SHOWMINNOACTIVE : SW_SHOWMINIMIZED;
+    }
+    else cmd = SW_SHOWDEFAULT;
+    if(hwnd && ShowWindow(hwnd, cmd)) {
+        result = RES_OK;
+    }    
+#elif defined __nG_X11
+    if(winAttr & nGHidden) {
+        XUnmapWindow(display, window);
+    }
+    else {
+        XMapRaised(display, window);
+    }
+    if(a_winAttr & nGMaximized) {
+        XEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.type = ClientMessage;
+        ev.xclient.window = window;
+        ev.xclient.message_type = XInternAtom (display, "_NET_WM_STATE", False);;
+        ev.xclient.format = 32;
+        ev.xclient.data.l[0] = 1; //_NET_WM_STATE_ADD;
+        ev.xclient.data.l[1] = XInternAtom (display,  "_NET_WM_STATE_MAXIMIZED_HORIZ", False);
+        ev.xclient.data.l[2] = XInternAtom (display,  "_NET_WM_STATE_MAXIMIZED_HORIZ", False);
+        XSendEvent( display, window, False, SubstructureNotifyMask, (XEvent *)&ev );
+    }
+#endif
+    return result;
+}
+
+
 
 /*========================================================================
   nGSurface::update : draw and get events
@@ -2160,9 +2217,12 @@ void nGSurface::update()
 #  endif
         }
         if( surfaceType == SURFACE_2D) {
-            XPutImage(display, window,gc,  screenImage, 0,0,0,0,sWidth, sHeight);
-            XSync(display,0);
-            XFlush(display);
+            if(dirty) {
+                XPutImage(display, window,gc,  screenImage, 0,0,0,0,sWidth, sHeight);
+                dirty = false;
+                XSync(display,0);
+                XFlush(display);
+            }
         }
 #endif /*__nG_X11*/
 
@@ -2190,7 +2250,7 @@ void nGSurface::update()
     processEvents();
 }
 
-unsigned char* nGSurface::getSurface() { return surface; }
+unsigned char* nGSurface::getSurface() { dirty=true; return surface; }
 unsigned int nGSurface::getWidth() const{
 #ifdef __nG_OSX
     return [handle contentRectForFrameRect: [handle frame]].size.width;
